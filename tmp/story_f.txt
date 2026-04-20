@@ -1,0 +1,366 @@
+1400:         const haystack = `${channel.name} ${channel.description} ${channel.lastMessage?.content || ''}`.toLowerCase();
+1401:         if (q && !haystack.includes(q)) return false;
+1402:         if (conversationFilter === 'unread') return channel.unread > 0;
+1403:         if (conversationFilter === 'favorites') return channel.isFavorite;
+1404:         if (conversationFilter === 'groups') return channel.isGroup;
+1405:         return true;
+1406:       })
+1407:       .sort((a, b) => {
+1408:         // Pinned conversations come first
+1409:         const aPinned = channelPinned[a.id] || false;
+1410:         const bPinned = channelPinned[b.id] || false;
+1411:         if (aPinned && !bPinned) return -1;
+1412:         if (!aPinned && bPinned) return 1;
+1413: 
+1414:         const aTime = a.lastMessage ? new Date(a.lastMessage.created_at).getTime() : 0;
+1415:         const bTime = b.lastMessage ? new Date(b.lastMessage.created_at).getTime() : 0;
+1416:         return bTime - aTime;
+1417:       });
+1418:   }, [channels, messages, unreadByChannel, channelSearch, conversationFilter, resolveConversationAvatar, isGroupChannelId, getChannelDisplayName, getChannelAvatarLabel, channelArchived, channelPinned, showArchivedOnly]);
+1419: 
+1420:   const archivedConversationsCount = channels.filter((channel) => channelArchived[channel.id]).length;
+1421:   const selectedChannelMeta = channels.find((channel) => channel.id === selectedChannel);
+1422: 
+1423:   const currentStoryOwnerKey = useMemo(() => {
+1424:     const base = normalizeUserKey(currentUserEmail || currentUserProfileName || currentUser || 'staff-secretary');
+1425:     return base || 'staff-secretary';
+1426:   }, [normalizeUserKey, currentUserEmail, currentUserProfileName, currentUser]);
+1427: 
+1428:   const currentStoryOwnerName = currentUserProfileName || currentUser;
+1429: 
+1430:   const pruneExpiredStories = useCallback((input: PersistedStoryRecord[]) => {
+1431:     const now = Date.now();
+1432:     return input.filter((story) => {
+1433:       const expiry = new Date(story.expires_at).getTime();
+1434:       return !Number.isNaN(expiry) && expiry > now;
+1435:     });
+1436:   }, []);
+1437: 
+1438:   const canCurrentUserSeeStory = useCallback((story: PersistedStoryRecord) => {
+1439:     if (story.owner_key === currentStoryOwnerKey) return true;
+1440:     if (story.privacy === 'all') return true;
+1441:     if (story.privacy === 'only') return story.allowed_keys.includes(currentStoryOwnerKey);
+1442:     return !story.excluded_keys.includes(currentStoryOwnerKey);
+1443:   }, [currentStoryOwnerKey]);
+1444: 
+1445:   const isStoriesTableMissingError = useCallback((error: any) => {
+1446:     const status = Number(error?.status || 0);
+1447:     const code = String(error?.code || '').toUpperCase();
+1448:     const message = String(error?.message || '').toLowerCase();
+1449:     if (status === 404) return true;
+1450:     if (code === 'PGRST205') return true;
+1451:     if (message.includes('relation') && message.includes('stories')) return true;
+1452:     if (message.includes('table') && message.includes('stories') && message.includes('not')) return true;
+1453:     return false;
+1454:   }, []);
+1455: 
+1456:   const persistStoriesLocalFallback = useCallback((next: PersistedStoryRecord[]) => {
+1457:     setStoryRecords(next);
+1458:     try {
+1459:       localStorage.setItem(STORY_LS_FALLBACK_KEY, JSON.stringify(next));
+1460:     } catch {
+1461:       // Ignore fallback storage errors.
+1462:     }
+1463:   }, []);
+1464: 
+1465:   const loadStoriesFromLocalFallback = useCallback(() => {
+1466:     try {
+1467:       const raw = localStorage.getItem(STORY_LS_FALLBACK_KEY);
+1468:       const parsed = raw ? (JSON.parse(raw) as PersistedStoryRecord[]) : [];
+1469:       persistStoriesLocalFallback(pruneExpiredStories(parsed || []));
+1470:     } catch {
+1471:       setStoryRecords([]);
+1472:     }
+1473:   }, [persistStoriesLocalFallback, pruneExpiredStories]);
+1474: 
+1475:   const mapStoryRowsToRecords = useCallback((rows: StoryRow[], storyViews: StoryViewRow[]) => {
+1476:     const viewsByStory = new Map<string, StoryViewEntry[]>();
+1477:     storyViews.forEach((view) => {
+1478:       const existing = viewsByStory.get(view.story_id) || [];
+1479:       existing.push({
+1480:         viewer_key: view.viewer_key,
+1481:         viewer_name: view.viewer_name,
+1482:         viewed_at: view.viewed_at,
+1483:       });
+1484:       viewsByStory.set(view.story_id, existing);
+1485:     });
+1486: 
+1487:     return rows.map((story) => ({
+1488:       id: story.id,
+1489:       owner_key: story.owner_key,
+1490:       owner_name: story.owner_name,
+1491:       avatar_url: story.avatar_url || '',
+1492:       type: story.type,
+1493:       content: story.content || undefined,
+1494:       url: story.url || undefined,
+1495:       bg_color: story.bg_color || undefined,
+1496:       privacy: story.privacy || 'all',
+1497:       allowed_keys: Array.isArray(story.allowed_keys) ? story.allowed_keys : [],
+1498:       excluded_keys: Array.isArray(story.excluded_keys) ? story.excluded_keys : [],
+1499:       views: viewsByStory.get(story.id) || [],
+1500:       created_at: story.created_at,
+1501:       expires_at: story.expires_at,
+1502:     }));
+1503:   }, []);
+1504: 
+1505:   const fetchStories = useCallback(async () => {
+1506:     if (!storiesBackendAvailable) {
+1507:       loadStoriesFromLocalFallback();
+1508:       return;
+1509:     }
+1510: 
+1511:     try {
+1512:       const nowIso = new Date().toISOString();
+1513:       const { data: rows, error } = await supabase
+1514:         .from('stories')
+1515:         .select('id, owner_key, owner_name, avatar_url, type, content, url, bg_color, privacy, allowed_keys, excluded_keys, created_at, expires_at')
+1516:         .gt('expires_at', nowIso)
+1517:         .order('created_at', { ascending: false });
+1518: 
+1519:       if (error) throw error;
+1520: 
+1521:       const typedRows = (rows || []) as StoryRow[];
+1522:       if (typedRows.length === 0) {
+1523:         setStoryRecords([]);
+1524:         return;
+1525:       }
+1526: 
+1527:       const storyIds = typedRows.map((row) => row.id);
+1528:       const { data: viewRows, error: viewsError } = await supabase
+1529:         .from('story_views')
+1530:         .select('story_id, viewer_key, viewer_name, viewed_at')
+1531:         .in('story_id', storyIds)
+1532:         .order('viewed_at', { ascending: true });
+1533: 
+1534:       if (viewsError) throw viewsError;
+1535: 
+1536:       setStoryRecords(mapStoryRowsToRecords(typedRows, (viewRows || []) as StoryViewRow[]));
+1537:       setStoriesBackendAvailable(true);
+1538:     } catch (error: any) {
+1539:       if (isStoriesTableMissingError(error)) {
+1540:         setStoriesBackendAvailable(false);
+1541:         loadStoriesFromLocalFallback();
+1542:         return;
+1543:       }
+1544:       setStoryRecords([]);
+1545:     }
+1546:   }, [supabase, mapStoryRowsToRecords, isStoriesTableMissingError, storiesBackendAvailable, loadStoriesFromLocalFallback]);
+1547: 
+1548:   const markStoryViewed = useCallback(async (storyId: string) => {
+1549:     const currentStory = storyRecords.find((story) => story.id === storyId);
+1550:     if (!currentStory) return;
+1551:     if (currentStory.owner_key === currentStoryOwnerKey) return;
+1552:     if (!canCurrentUserSeeStory(currentStory)) return;
+1553:     if (currentStory.views.some((v) => v.viewer_key === currentStoryOwnerKey)) return;
+1554: 
+1555:     const optimisticView: StoryViewEntry = {
+1556:       viewer_key: currentStoryOwnerKey,
+1557:       viewer_name: currentStoryOwnerName,
+1558:       viewed_at: new Date().toISOString(),
+1559:     };
+1560: 
+1561:     if (!storiesBackendAvailable) {
+1562:       setStoryRecords((prev) => {
+1563:         const next = prev.map((story) => (
+1564:           story.id === storyId
+1565:             ? { ...story, views: [...story.views, optimisticView] }
+1566:             : story
+1567:         ));
+1568:         try {
+1569:           localStorage.setItem(STORY_LS_FALLBACK_KEY, JSON.stringify(next));
+1570:         } catch {
+1571:           // Ignore fallback storage errors.
+1572:         }
+1573:         return next;
+1574:       });
+1575:       return;
+1576:     }
+1577: 
+1578:     setStoryRecords((prev) => prev.map((story) => (
+1579:       story.id === storyId
+1580:         ? { ...story, views: [...story.views, optimisticView] }
+1581:         : story
+1582:     )));
+1583: 
+1584:     const { error } = await supabase
+1585:       .from('story_views')
+1586:       .upsert([
+1587:         {
+1588:           story_id: storyId,
+1589:           viewer_key: currentStoryOwnerKey,
+1590:           viewer_name: currentStoryOwnerName,
+1591:           viewed_at: optimisticView.viewed_at,
+1592:         },
+1593:       ], { onConflict: 'story_id,viewer_key' });
+1594: 
+1595:     if (error) {
+1596:       if (isStoriesTableMissingError(error)) {
+1597:         setStoriesBackendAvailable(false);
+1598:         setStoryRecords((prev) => {
+1599:           try {
+1600:             localStorage.setItem(STORY_LS_FALLBACK_KEY, JSON.stringify(prev));
+1601:           } catch {
+1602:             // Ignore fallback storage errors.
+1603:           }
+1604:           return prev;
+1605:         });
+1606:         return;
+1607:       }
+1608:       void fetchStories();
+1609:     }
+1610:   }, [storyRecords, currentStoryOwnerKey, currentStoryOwnerName, canCurrentUserSeeStory, supabase, fetchStories, storiesBackendAvailable, isStoriesTableMissingError]);
+1611: 
+1612:   useEffect(() => {
+1613:     void fetchStories();
+1614: 
+1615:     const expiryPoll = window.setInterval(() => {
+1616:       if (storiesBackendAvailable) {
+1617:         void fetchStories();
+1618:         return;
+1619:       }
+1620:       setStoryRecords((prev) => {
+1621:         const cleaned = pruneExpiredStories(prev);
+1622:         if (cleaned.length !== prev.length) {
+1623:           try {
+1624:             localStorage.setItem(STORY_LS_FALLBACK_KEY, JSON.stringify(cleaned));
+1625:           } catch {
+1626:             // Ignore fallback storage errors.
+1627:           }
+1628:         }
+1629:         return cleaned;
+1630:       });
+1631:     }, 60 * 1000);
+1632: 
+1633:     return () => {
+1634:       window.clearInterval(expiryPoll);
+1635:     };
+1636:   }, [fetchStories, storiesBackendAvailable, pruneExpiredStories]);
+1637: 
+1638:   // Build real 24h stories with privacy rules.
+1639:   const contactStories = useMemo<UserStory[]>(() => {
+1640:     const visibleStories = pruneExpiredStories(storyRecords).filter(canCurrentUserSeeStory);
+1641:     const grouped = new Map<string, PersistedStoryRecord[]>();
+1642:     visibleStories.forEach((story) => {
+1643:       const key = story.owner_key;
+1644:       const list = grouped.get(key) || [];
+1645:       list.push(story);
+1646:       grouped.set(key, list);
+1647:     });
+1648: 
+1649:     const results: UserStory[] = [];
+1650:     grouped.forEach((list, ownerKey) => {
+1651:       const sorted = [...list].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+1652:       const first = sorted[0];
+1653:       const viewerSeenAll = sorted.every((s) => s.views.some((v) => v.viewer_key === currentStoryOwnerKey));
+1654:       const channelCandidate = conversationItems.find((c) => normalizeUserKey(c.name) === ownerKey || normalizeUserKey(c.id) === ownerKey);
+1655:       const channelName = first.owner_key === currentStoryOwnerKey ? 'Mon statut' : (channelCandidate?.name || first.owner_name || 'Story');
+1656:       const avatar = channelCandidate?.avatarSrc || first.avatar_url || resolveAvatarForName(first.owner_name || channelName);
+1657: 
+1658:       results.push({
+1659:         owner_key: ownerKey,
+1660:         channel_id: ownerKey,
+1661:         channel_name: channelName,
+1662:         avatar_url: avatar,
+1663:         has_unviewed: !viewerSeenAll,
+1664:         items: sorted.map((s) => ({
+1665:           id: s.id,
+1666:           type: s.type,
+1667:           content: s.content,
+1668:           url: s.url,
+1669:           bg_color: s.bg_color,
+1670:           privacy: s.privacy,
+1671:           allowed_keys: s.allowed_keys,
+1672:           excluded_keys: s.excluded_keys,
+1673:           views: s.views,
+1674:           owner_key: s.owner_key,
+1675:           created_at: s.created_at,
+1676:         })),
+1677:       });
+1678:     });
+1679: 
+1680:     return results.sort((a, b) => {
+1681:       if (a.owner_key === currentStoryOwnerKey) return -1;
+1682:       if (b.owner_key === currentStoryOwnerKey) return 1;
+1683:       return a.has_unviewed === b.has_unviewed ? 0 : a.has_unviewed ? -1 : 1;
+1684:     });
+1685:   }, [storyRecords, pruneExpiredStories, canCurrentUserSeeStory, conversationItems, currentStoryOwnerKey, normalizeUserKey, resolveAvatarForName]);
+1686: 
+1687:   useEffect(() => {
+1688:     if (!showStoryViewer || !activeStory) return;
+1689:     const currentItem = activeStory.items[activeStoryItemIndex];
+1690:     if (currentItem?.id) {
+1691:       void markStoryViewed(currentItem.id);
+1692:     }
+1693: 
+1694:     const timer = setTimeout(() => {
+1695:       const nextIndex = activeStoryItemIndex + 1;
+1696:       if (nextIndex < activeStory.items.length) {
+1697:         setActiveStoryItemIndex(nextIndex);
+1698:         setStoryProgressKey((k) => k + 1);
+1699:       } else {
+1700:         setShowStoryViewer(false);
+1701:       }
+1702:     }, 5000);
+1703:     return () => clearTimeout(timer);
+1704:   }, [showStoryViewer, activeStory, activeStoryItemIndex, markStoryViewed]);
+1705: 
+1706:   useEffect(() => {
+1707:     setNewProfileStatusText(myProfileStatus);
+1708:   }, [myProfileStatus]);
+1709: 
+1710:   const storyAudienceOptions = useMemo(() => {
+1711:     return conversationItems
+1712:       .filter((c) => normalizeUserKey(c.name) !== currentStoryOwnerKey && normalizeUserKey(c.id) !== currentStoryOwnerKey)
+1713:       .map((c) => ({ key: normalizeUserKey(c.name) || normalizeUserKey(c.id), label: c.name }));
+1714:   }, [conversationItems, normalizeUserKey, currentStoryOwnerKey]);
+1715: 
+1716:   const handleStoryFilePick = useCallback((file: File | null) => {
+1717:     if (!file) return;
+1718:     const reader = new FileReader();
+1719:     reader.onload = () => {
+1720:       const result = typeof reader.result === 'string' ? reader.result : '';
+1721:       setStoryDraftImage(result);
+1722:     };
+1723:     reader.readAsDataURL(file);
+1724:   }, []);
+1725: 
+1726:   const resetStoryComposer = useCallback(() => {
+1727:     setStoryDraftText('');
+1728:     setStoryDraftImage('');
+1729:     setStoryDraftBg(STORY_BG_COLORS[0]);
+1730:     setStoryPrivacy('all');
+1731:     setStoryAudienceKeys([]);
+1732:     setShowStoryViewers(false);
+1733:   }, []);
+1734: 
+1735:   const handlePublishStory = useCallback(async () => {
+1736:     const text = storyDraftText.trim();
+1737:     const hasImage = Boolean(storyDraftImage);
+1738:     if (!text && !hasImage) return;
+1739: 
+1740:     const now = new Date();
+1741:     const recordBase: Omit<PersistedStoryRecord, 'id' | 'views'> = {
+1742:       owner_key: currentStoryOwnerKey,
+1743:       owner_name: currentStoryOwnerName,
+1744:       avatar_url: currentUserAvatarUrl || resolveAvatarForName(currentStoryOwnerName || currentUser),
+1745:       type: hasImage ? 'image' : 'text',
+1746:       content: text || undefined,
+1747:       url: hasImage ? storyDraftImage : undefined,
+1748:       bg_color: hasImage ? undefined : storyDraftBg,
+1749:       privacy: storyPrivacy,
+1750:       allowed_keys: storyPrivacy === 'only' ? storyAudienceKeys : [],
+1751:       excluded_keys: storyPrivacy === 'exclude' ? storyAudienceKeys : [],
+1752:       created_at: now.toISOString(),
+1753:       expires_at: new Date(now.getTime() + STORY_EXPIRY_MS).toISOString(),
+1754:     };
+1755: 
+1756:     if (!storiesBackendAvailable) {
+1757:       const localRecord: PersistedStoryRecord = {
+1758:         ...recordBase,
+1759:         id: crypto.randomUUID(),
+1760:         views: [],
+1761:       };
+1762:       setStoryRecords((prev) => {
+1763:         const next = [localRecord, ...prev];
+1764:         try {
+1765:           localStorage.setItem(STORY_LS_FALLBACK_KEY, JSON.stringify(next));

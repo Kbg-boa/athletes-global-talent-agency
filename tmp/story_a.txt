@@ -1,0 +1,131 @@
+130:   channel: string;
+131:   is_online: boolean;
+132:   is_typing?: boolean;
+133:   is_recording?: boolean;
+134:   last_seen: string;
+135: }
+136: 
+137: interface StoryItem {
+138:   id: string;
+139:   type: 'text' | 'image';
+140:   content?: string;
+141:   url?: string;
+142:   bg_color?: string;
+143:   privacy?: 'all' | 'only' | 'exclude';
+144:   allowed_keys?: string[];
+145:   excluded_keys?: string[];
+146:   views?: StoryViewEntry[];
+147:   owner_key?: string;
+148:   created_at: string;
+149: }
+150: 
+151: interface UserStory {
+152:   owner_key?: string;
+153:   channel_id: string;
+154:   channel_name: string;
+155:   avatar_url: string;
+156:   items: StoryItem[];
+157:   has_unviewed: boolean;
+158: }
+159: 
+160: interface StoryViewEntry {
+161:   viewer_key: string;
+162:   viewer_name: string;
+163:   viewed_at: string;
+164: }
+165: 
+166: interface PersistedStoryRecord {
+167:   id: string;
+168:   owner_key: string;
+169:   owner_name: string;
+170:   avatar_url: string;
+171:   type: 'text' | 'image';
+172:   content?: string;
+173:   url?: string;
+174:   bg_color?: string;
+175:   privacy: 'all' | 'only' | 'exclude';
+176:   allowed_keys: string[];
+177:   excluded_keys: string[];
+178:   views: StoryViewEntry[];
+179:   created_at: string;
+180:   expires_at: string;
+181: }
+182: 
+183: interface StoryRow {
+184:   id: string;
+185:   owner_key: string;
+186:   owner_name: string;
+187:   avatar_url?: string | null;
+188:   type: 'text' | 'image';
+189:   content?: string | null;
+190:   url?: string | null;
+191:   bg_color?: string | null;
+192:   privacy?: 'all' | 'only' | 'exclude' | null;
+193:   allowed_keys?: string[] | null;
+194:   excluded_keys?: string[] | null;
+195:   created_at: string;
+196:   expires_at: string;
+197: }
+198: 
+199: interface StoryViewRow {
+200:   story_id: string;
+201:   viewer_key: string;
+202:   viewer_name: string;
+203:   viewed_at: string;
+204: }
+205: 
+206: const STORY_BG_COLORS = [
+207:   'linear-gradient(135deg,#1a6b4a,#25d366)',
+208:   'linear-gradient(135deg,#1a4080,#53bdeb)',
+209:   'linear-gradient(135deg,#6b1a6b,#d366c7)',
+210:   'linear-gradient(135deg,#806b1a,#ebc953)',
+211:   'linear-gradient(135deg,#6b1a1a,#eb5353)',
+212:   'linear-gradient(135deg,#1a5f6b,#53ebd5)',
+213: ];
+214: 
+215: const STORY_EXPIRY_MS = 24 * 60 * 60 * 1000;
+216: const STORY_LS_FALLBACK_KEY = 'agta_story_records_fallback_v1';
+217: 
+218: interface MessageNotification {
+219:   id: string;
+220:   message_id?: string;
+221:   channel?: string;
+222:   recipient: string;
+223:   notification_type: 'mention' | 'priority' | 'reminder';
+224:   title?: string;
+225:   body?: string;
+226:   is_read?: boolean;
+227:   created_at: string;
+228: }
+229: 
+230: interface MessageActionItem {
+231:   id: string;
+232:   message_id?: string;
+233:   channel?: string;
+234:   action_type: 'task' | 'reminder' | 'calendar';
+235:   title: string;
+236:   notes?: string;
+237:   due_at?: string;
+238:   status?: 'open' | 'done';
+239:   created_by?: string;
+240:   created_at: string;
+241: }
+242: 
+243: interface OfflineInsertItem {
+244:   id: string;
+245:   table: string;
+246:   row: Record<string, any>;
+247:   attempts: number;
+248:   created_at: string;
+249: }
+250: 
+251: interface CallHistoryItem {
+252:   id: string | number;
+253:   channel?: string;
+254:   from_user: string;
+255:   to_user?: string;
+256:   call_type: CallType;
+257:   status: 'missed' | 'rejected' | 'completed' | 'cancelled';
+258:   duration_seconds?: number;
+259:   created_at: string;
+260: }

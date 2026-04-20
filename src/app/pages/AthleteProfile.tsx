@@ -145,7 +145,7 @@ export default function AthleteProfile() {
                 {Object.entries(athlete.stats).map(([key, value]) => (
                   <div key={key} className="bg-black p-4 rounded">
                     <p className="text-gray-400 text-sm mb-1 capitalize">{key}</p>
-                    <p className="text-[#C7FF00] font-bold text-2xl">{value}</p>
+                    <p className="text-[#C7FF00] font-bold text-2xl">{String(value)}</p>
                   </div>
                 ))}
               </div>

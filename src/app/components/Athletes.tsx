@@ -1,39 +1,205 @@
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
 import { MapPin } from "lucide-react";
 import ikambaImage from "../../imports/IKAMBA_01.jpg.jpeg";
 import mbussaImage from "../../imports/MBUSSA_02.jpg.jpeg";
+import { supabase } from "../../lib/supabase";
+
+type AthleteRow = {
+  id: string;
+  name?: string | null;
+  full_name?: string | null;
+  sport?: string | null;
+  position?: string | null;
+  nationality?: string | null;
+  location?: string | null;
+  bio?: string | null;
+  description?: string | null;
+  profile?: string | null;
+  achievements?: string | null;
+  height?: string | null;
+  weight?: string | null;
+  wingspan?: string | null;
+  status?: string | null;
+  profile_photo_url?: string | null;
+  photo_urls?: string | null;
+  created_at?: string | null;
+};
+
+const FALLBACK_IMAGES = [ikambaImage, mbussaImage];
+
+const PINNED_FEATURED = [
+  {
+    id: "legacy-ikamba",
+    name: "Exaucé Ikamba",
+    position: "Basketball • Forward/Center",
+    nationality: "DR Congo 🇨🇩",
+    image: ikambaImage,
+    height: "2.04 m",
+    weight: "95 kg",
+    wingspan: "2.08 m",
+    profile: "Explosive • Versatile Playmaker • Shooter • Defender",
+    achievements: ["National Team Player", "BAL Qualified Player", "LIPROBAKIN All-Star 2025"],
+    description: "AGTA proudly presents Exaucé Ikamba, a basketball prospect with strong potential ready for the next level.",
+  },
+  {
+    id: "legacy-mbussa",
+    name: "Victorine Mbussa",
+    position: "Athletics • 100m Sprinter",
+    nationality: "DR Congo 🇨🇩",
+    image: mbussaImage,
+    height: "",
+    weight: "",
+    wingspan: "",
+    profile: "Elite Sprint Specialist • National Team Athlete • High Performance Competitor",
+    achievements: [],
+    description: "AGTA is proud to represent Victorine Mbussa, a 100m sprinter from the national team from DR Congo.",
+  },
+] as const;
+
+const pickImage = (row: AthleteRow, index: number): string => {
+  const profile = String(row.profile_photo_url || "").trim();
+  if (profile) return profile;
+  const firstPhoto = String(row.photo_urls || "")
+    .split(",")
+    .map((part) => part.trim())
+    .find(Boolean);
+  if (firstPhoto) return firstPhoto;
+  return FALLBACK_IMAGES[index % FALLBACK_IMAGES.length];
+};
 
 export default function Athletes() {
-  const athletes = [
-    {
-      id: 1,
-      name: "Exaucé Ikamba",
-      position: "Basketball Player",
-      sport: "Basketball",
-      nationality: "DR Congo 🇨🇩",
-      image: ikambaImage,
-      height: "2.04 m",
-      weight: "95 kg",
-      wingspan: "2.08 m",
-      profile: "Explosive • Versatile Playmaker • Shooter • Defender",
-      achievements: [
-        "National Team Player",
-        "BAL Qualified Player",
-        "LIPROBAKIN All-Star 2025"
-      ],
-      description: "AGTA proudly presents Exaucé Ikamba, a basketball prospect with strong potential ready for the next level."
-    },
-    {
-      id: 2,
-      name: "Victorine Mbussa",
-      position: "100m Sprinter",
-      sport: "Athletics",
-      nationality: "DR Congo 🇨🇩",
-      image: mbussaImage,
-      profile: "Elite Sprint Specialist • National Team Athlete • High Performance Competitor",
-      description: "AGTA is proud to represent Victorine Mbussa, a 100m sprinter from the national team from DR Congo. We continue our mission to connect the best African talents to global opportunities."
-    },
-  ];
+  const [athletes, setAthletes] = useState<AthleteRow[]>([]);
+  const [recruitmentPhotoMap, setRecruitmentPhotoMap] = useState<Record<string, string>>({});
+
+  const athleteKey = (name?: string | null, sport?: string | null, position?: string | null) =>
+    `${String(name || '').trim().toLowerCase()}|${String(sport || '').trim().toLowerCase()}|${String(position || '').trim().toLowerCase()}`;
+
+  const parseProfilePhotoFromExperience = (experience?: string | null) => {
+    const text = String(experience || "");
+    if (!text) return "";
+
+    const linksMatch = text.match(/Liens\s*&\s*assets:\s*(.*)/i);
+    if (!linksMatch) return "";
+
+    const links: Record<string, string> = {};
+    linksMatch[1].split(" | ").forEach((chunk) => {
+      const [rawKey, ...rest] = chunk.split(": ");
+      const value = rest.join(": ").trim();
+      if (rawKey && value) {
+        links[rawKey.trim().toLowerCase()] = value;
+      }
+    });
+
+    const direct = String(links.profile_photo_url || links.photo_url || "").trim();
+    if (direct) return direct;
+
+    const firstPhoto = String(links.photo_urls || "")
+      .split(",")
+      .map((part) => part.trim())
+      .find(Boolean);
+    return firstPhoto || "";
+  };
+
+  const fetchPublishedAthletes = useCallback(async () => {
+    const [athletesRes, recruitmentRes] = await Promise.all([
+      supabase
+        .from("athletes")
+        .select("*")
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("recruitment")
+        .select("full_name, sport, position, experience, created_at")
+        .order("created_at", { ascending: false })
+        .limit(500),
+    ]);
+
+    if (athletesRes.error) {
+      console.error("Erreur chargement Featured Athletes:", athletesRes.error);
+      return;
+    }
+
+    if (recruitmentRes.error) {
+      console.error("Erreur chargement photos recrutement:", recruitmentRes.error);
+      return;
+    }
+
+    const fallback: Record<string, string> = {};
+    (recruitmentRes.data || []).forEach((row: any) => {
+      const key = athleteKey(row.full_name, row.sport, row.position);
+      if (!key || fallback[key]) return;
+      const photo = parseProfilePhotoFromExperience(row.experience);
+      if (photo) fallback[key] = photo;
+    });
+
+    setRecruitmentPhotoMap(fallback);
+
+    const rows = ((athletesRes.data || []) as AthleteRow[]).filter((row) => {
+      const status = String(row.status || "").toLowerCase().trim();
+      return status === "published";
+    });
+
+    setAthletes(rows);
+  }, []);
+
+  useEffect(() => {
+    void fetchPublishedAthletes();
+
+    const channel = supabase
+      .channel("public-featured-athletes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "athletes" }, () => {
+        void fetchPublishedAthletes();
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "recruitment" }, () => {
+        void fetchPublishedAthletes();
+      })
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [fetchPublishedAthletes]);
+
+  const normalizedAthletes = useMemo(
+    () =>
+      athletes.map((row, index) => ({
+        id: row.id,
+        name: String(row.name || row.full_name || "Athlète AGTA"),
+        position: [row.sport, row.position].filter(Boolean).join(" • ") || "Athlète",
+        nationality: String(row.nationality || row.location || "International"),
+        image: (() => {
+          const direct = pickImage(row, index);
+          const hasDirect = String(row.profile_photo_url || "").trim() || String(row.photo_urls || "").trim();
+          if (hasDirect) return direct;
+          const key = athleteKey(row.name || row.full_name, row.sport, row.position);
+          return recruitmentPhotoMap[key] || direct;
+        })(),
+        height: row.height || "",
+        weight: row.weight || "",
+        wingspan: row.wingspan || "",
+        profile: String(row.profile || "High Potential Prospect"),
+        achievements: String(row.achievements || "")
+          .split("|")
+          .map((item) => item.trim())
+          .filter(Boolean),
+        description: String(
+          row.bio ||
+            row.description ||
+            "AGTA presents this talent profile for international clubs, recruiters and agencies."
+        ),
+      })),
+    [athletes, recruitmentPhotoMap]
+  );
+
+  const featuredAthletes = useMemo(() => {
+    const existingNames = new Set(
+      normalizedAthletes.map((athlete) => athlete.name.trim().toLowerCase())
+    );
+    const missingPinned = PINNED_FEATURED.filter(
+      (athlete) => !existingNames.has(athlete.name.trim().toLowerCase())
+    );
+    return [...missingPinned, ...normalizedAthletes];
+  }, [normalizedAthletes]);
 
   return (
     <section id="athletes" className="bg-black py-20 px-6">
@@ -54,7 +220,7 @@ export default function Athletes() {
         </motion.div>
 
         <div className="grid md:grid-cols-2 gap-12 max-w-6xl mx-auto">
-          {athletes.map((athlete, index) => (
+          {featuredAthletes.map((athlete, index) => (
             <motion.div
               key={athlete.id}
               initial={{ opacity: 0, y: 20 }}

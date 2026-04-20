@@ -1,0 +1,63 @@
+3058:     const notificationChannel = supabase
+3059:       .channel(`notifications-${selectedChannel}`)
+3060:       .on('postgres_changes', { event: '*', schema: 'public', table: 'message_notifications' }, (payload) => {
+3061:         if (payload.eventType === 'INSERT') {
+3062:           const notif = payload.new as MessageNotification;
+3063:           if (notif.recipient === currentUser && !notif.is_read) {
+3064:             showBrowserNotification(notif.title || 'Nouvelle notification', notif.body || 'Action requise');
+3065:           }
+3066:         }
+3067:         void fetchNotifications();
+3068:       })
+3069:       .subscribe();
+3070: 
+3071:     const timelineChannel = supabase
+3072:       .channel(`timeline-${selectedChannel}`)
+3073:       .on('postgres_changes', { event: '*', schema: 'public', table: 'message_actions' }, () => {
+3074:         void fetchActionTimeline();
+3075:       })
+3076:       .subscribe();
+3077: 
+3078:     const storiesChannel = storiesBackendAvailable
+3079:       ? supabase
+3080:           .channel(`stories-realtime-${currentStoryOwnerKey}`)
+3081:           .on('postgres_changes', { event: '*', schema: 'public', table: 'stories' }, () => {
+3082:             void fetchStories();
+3083:           })
+3084:           .on('postgres_changes', { event: '*', schema: 'public', table: 'story_views' }, () => {
+3085:             void fetchStories();
+3086:           })
+3087:           .subscribe()
+3088:       : null;
+3089: 
+3090:     return () => {
+3091:       supabase.removeChannel(msgChannel);
+3092:       supabase.removeChannel(callChannel);
+3093:       supabase.removeChannel(presenceChannel);
+3094:       supabase.removeChannel(profileChannel);
+3095:       supabase.removeChannel(notificationChannel);
+3096:       supabase.removeChannel(timelineChannel);
+3097:       if (storiesChannel) supabase.removeChannel(storiesChannel);
+3098:       stopRingtone();
+3099:       if (incomingTimeoutRef.current) window.clearTimeout(incomingTimeoutRef.current);
+3100:       if (outgoingTimeoutRef.current) window.clearTimeout(outgoingTimeoutRef.current);
+3101:       void publishPresence(false);
+3102:     };
+3103:   }, [
+3104:     callUser,
+3105:     fetchMessages,
+3106:     fetchUnreadCounts,
+3107:     fetchCallHistory,
+3108:     fetchViewOnceReceipts,
+3109:     selectedChannel,
+3110:     selectedStorageChannelId,
+3111:     botPrivateChannelId,
+3112:     normalizeMessageForUi,
+3113:     createPeer,
+3114:     endCall,
+3115:     logCallEvent,
+3116:     playRingtone,
+3117:     stopRingtone,
+3118:     fetchPresence,
+3119:     fetchChatProfiles,
+3120:     fetchNotifications,

@@ -1,0 +1,150 @@
+5816:             onClick={() => setShowStoryViewer(false)}
+5817:           >
+5818:             <motion.div
+5819:               initial={{ scale: 0.98, opacity: 0 }}
+5820:               animate={{ scale: 1, opacity: 1 }}
+5821:               exit={{ scale: 0.98, opacity: 0 }}
+5822:               className="w-full max-w-md h-[80vh] rounded-3xl overflow-hidden border border-[#26353d] bg-[#111b21] shadow-2xl relative"
+5823:               onClick={(e) => e.stopPropagation()}
+5824:             >
+5825:               <div className="absolute top-0 left-0 right-0 z-20 p-3 bg-gradient-to-b from-black/70 to-transparent">
+5826:                 <div className="flex gap-1 mb-3">
+5827:                   {activeStory.items.map((item, idx) => (
+5828:                     <div key={item.id} className="flex-1 h-1 rounded-full bg-white/25 overflow-hidden">
+5829:                       <motion.div
+5830:                         key={`${item.id}-${storyProgressKey}`}
+5831:                         className="h-full bg-white"
+5832:                         initial={{ width: idx < activeStoryItemIndex ? '100%' : '0%' }}
+5833:                         animate={{ width: idx < activeStoryItemIndex ? '100%' : idx === activeStoryItemIndex ? '100%' : '0%' }}
+5834:                         transition={{ duration: idx === activeStoryItemIndex ? 5 : 0 }}
+5835:                       />
+5836:                     </div>
+5837:                   ))}
+5838:                 </div>
+5839:                 <div className="flex items-center justify-between">
+5840:                   <div className="flex items-center gap-3 min-w-0">
+5841:                     <img src={activeStory.avatar_url} alt={activeStory.channel_name} className="w-10 h-10 rounded-full border border-white/30 object-cover" />
+5842:                     <div className="min-w-0">
+5843:                       <p className="text-sm text-white font-semibold truncate">{activeStory.channel_name}</p>
+5844:                       <div className="flex items-center gap-2">
+5845:                         <p className="text-[11px] text-white/75">Statut 24h</p>
+5846:                         {activeStoryCurrentItem?.privacy && (
+5847:                           <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/15 text-white/80">
+5848:                             {activeStoryCurrentItem.privacy === 'all' ? 'Tout le monde' : activeStoryCurrentItem.privacy === 'only' ? 'Seulement...' : 'Sauf...'}
+5849:                           </span>
+5850:                         )}
+5851:                       </div>
+5852:                     </div>
+5853:                   </div>
+5854:                   <div className="flex items-center gap-2">
+5855:                     {activeStory?.owner_key === currentStoryOwnerKey && (
+5856:                       <button
+5857:                         onClick={() => setShowStoryViewers((v) => !v)}
+5858:                         className="text-white/90 hover:text-white text-xs px-2 py-1 rounded-lg bg-white/10"
+5859:                         title="Voir qui a vu"
+5860:                       >
+5861:                         Vu par {activeStoryViewers.length}
+5862:                       </button>
+5863:                     )}
+5864:                     <button onClick={() => setShowStoryViewer(false)} className="text-white/90 hover:text-white">
+5865:                       <X size={20} />
+5866:                     </button>
+5867:                   </div>
+5868:                 </div>
+5869:               </div>
+5870: 
+5871:               {activeStory.items[activeStoryItemIndex]?.type === 'image' && activeStory.items[activeStoryItemIndex]?.url ? (
+5872:                 <img
+5873:                   src={activeStory.items[activeStoryItemIndex].url}
+5874:                   alt="story"
+5875:                   className="w-full h-full object-cover"
+5876:                 />
+5877:               ) : (
+5878:                 <div
+5879:                   className="w-full h-full flex items-center justify-center px-8 text-center"
+5880:                   style={{ background: activeStory.items[activeStoryItemIndex]?.bg_color || STORY_BG_COLORS[0] }}
+5881:                 >
+5882:                   <p className="text-white text-2xl font-bold leading-snug">
+5883:                     {activeStory.items[activeStoryItemIndex]?.content || 'Statut'}
+5884:                   </p>
+5885:                 </div>
+5886:               )}
+5887: 
+5888:               <button
+5889:                 onClick={() => {
+5890:                   const prev = Math.max(activeStoryItemIndex - 1, 0);
+5891:                   setActiveStoryItemIndex(prev);
+5892:                   setStoryProgressKey((k) => k + 1);
+5893:                 }}
+5894:                 className="absolute left-0 top-0 bottom-0 w-1/2"
+5895:                 aria-label="Story précédente"
+5896:               />
+5897:               <button
+5898:                 onClick={() => {
+5899:                   const next = activeStoryItemIndex + 1;
+5900:                   if (next < activeStory.items.length) {
+5901:                     setActiveStoryItemIndex(next);
+5902:                     setStoryProgressKey((k) => k + 1);
+5903:                   } else {
+5904:                     setShowStoryViewer(false);
+5905:                   }
+5906:                 }}
+5907:                 className="absolute right-0 top-0 bottom-0 w-1/2"
+5908:                 aria-label="Story suivante"
+5909:               />
+5910: 
+5911:               <AnimatePresence>
+5912:                 {showStoryViewers && activeStory?.owner_key === currentStoryOwnerKey && (
+5913:                   <motion.div
+5914:                     initial={{ y: 24, opacity: 0 }}
+5915:                     animate={{ y: 0, opacity: 1 }}
+5916:                     exit={{ y: 24, opacity: 0 }}
+5917:                     className="absolute left-0 right-0 bottom-0 bg-black/75 border-t border-white/15 p-3 max-h-48 overflow-y-auto"
+5918:                   >
+5919:                     <p className="text-xs text-white/80 font-semibold mb-2">Vu par ({activeStoryViewers.length})</p>
+5920:                     {activeStoryViewers.length === 0 ? (
+5921:                       <p className="text-xs text-white/60">Aucune vue pour le moment.</p>
+5922:                     ) : (
+5923:                       <div className="space-y-1.5">
+5924:                         {activeStoryViewers.map((viewer) => (
+5925:                           <div key={`${viewer.viewer_key}-${viewer.viewed_at}`} className="flex items-center justify-between text-xs text-white/85">
+5926:                             <span className="truncate">{viewer.viewer_name || viewer.viewer_key}</span>
+5927:                             <span className="text-white/60">{formatTime(viewer.viewed_at)}</span>
+5928:                           </div>
+5929:                         ))}
+5930:                       </div>
+5931:                     )}
+5932:                   </motion.div>
+5933:                 )}
+5934:               </AnimatePresence>
+5935:             </motion.div>
+5936:           </motion.div>
+5937:         )}
+5938:       </AnimatePresence>
+5939: 
+5940:       {/* Story composer (camera/gallery + privacy) */}
+5941:       <AnimatePresence>
+5942:         {showCreateStoryModal && (
+5943:           <motion.div
+5944:             initial={{ opacity: 0 }}
+5945:             animate={{ opacity: 1 }}
+5946:             exit={{ opacity: 0 }}
+5947:             className="fixed inset-0 z-[96] bg-black/70 flex items-center justify-center p-4"
+5948:             onClick={() => setShowCreateStoryModal(false)}
+5949:           >
+5950:             <motion.div
+5951:               initial={{ y: 20, opacity: 0 }}
+5952:               animate={{ y: 0, opacity: 1 }}
+5953:               exit={{ y: 20, opacity: 0 }}
+5954:               className="w-full max-w-lg rounded-2xl bg-[#111b21] border border-[#26353d] overflow-hidden"
+5955:               onClick={(e) => e.stopPropagation()}
+5956:             >
+5957:               <div className="px-4 py-3 border-b border-[#26353d] flex items-center justify-between">
+5958:                 <div>
+5959:                   <p className="text-sm font-bold text-[#e9edef]">Publier un statut</p>
+5960:                   <p className="text-[11px] text-[#8696a0]">Story temporaire 24h</p>
+5961:                 </div>
+5962:                 <button onClick={() => setShowCreateStoryModal(false)} className="text-[#8696a0] hover:text-white transition">
+5963:                   <X size={18} />
+5964:                 </button>
+5965:               </div>

@@ -21,8 +21,9 @@ export default function Navigation() {
             <a href="#services" className="text-white hover:text-[#C7FF00] transition-colors">Services</a>
             <a href="#athletes" className="text-white hover:text-[#C7FF00] transition-colors">Athletes</a>
             <a href="#opportunities" className="text-white hover:text-[#C7FF00] transition-colors">Opportunities</a>
+            <a href="#actualites" className="text-white hover:text-[#C7FF00] transition-colors">Actualites</a>
             <a href="#contact" className="text-white hover:text-[#C7FF00] transition-colors">Contact</a>
-            <a href="#join" className="bg-[#C7FF00] text-black px-6 py-2 rounded hover:bg-[#b3e600] transition-colors">Join Us</a>
+            <a href="/join" className="bg-[#C7FF00] text-black px-6 py-2 rounded hover:bg-[#b3e600] transition-colors">Join Us</a>
           </div>
 
           <button
@@ -46,8 +47,9 @@ export default function Navigation() {
                 <a href="#services" className="text-white hover:text-[#C7FF00] transition-colors" onClick={() => setIsOpen(false)}>Services</a>
                 <a href="#athletes" className="text-white hover:text-[#C7FF00] transition-colors" onClick={() => setIsOpen(false)}>Athletes</a>
                 <a href="#opportunities" className="text-white hover:text-[#C7FF00] transition-colors" onClick={() => setIsOpen(false)}>Opportunities</a>
+                <a href="#actualites" className="text-white hover:text-[#C7FF00] transition-colors" onClick={() => setIsOpen(false)}>Actualites</a>
                 <a href="#contact" className="text-white hover:text-[#C7FF00] transition-colors" onClick={() => setIsOpen(false)}>Contact</a>
-                <a href="#join" className="bg-[#C7FF00] text-black px-6 py-2 rounded hover:bg-[#b3e600] transition-colors text-center" onClick={() => setIsOpen(false)}>Join Us</a>
+                <a href="/join" className="bg-[#C7FF00] text-black px-6 py-2 rounded hover:bg-[#b3e600] transition-colors text-center" onClick={() => setIsOpen(false)}>Join Us</a>
               </div>
             </motion.div>
           )}

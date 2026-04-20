@@ -1,0 +1,321 @@
+3960:     const existing = normalizeTranslations(message.translated_content);
+3961:     if (existing[translationTarget]) {
+3962:       setLiveTranslationMap((prev) => ({ ...prev, [String(message.id)]: existing[translationTarget] }));
+3963:       return;
+3964:     }
+3965: 
+3966:     const translated = await translateText(message.content, 'fr', translationTarget);
+3967:     setLiveTranslationMap((prev) => ({ ...prev, [String(message.id)]: translated }));
+3968: 
+3969:     const merged = { ...existing, [translationTarget]: translated };
+3970:     await supabase.from('messages').update({ translated_content: merged }).eq('id', message.id);
+3971:   };
+3972: 
+3973:   return (
+3974:     <div className="relative flex h-[88vh] overflow-hidden rounded-[28px] border border-[#26353d] bg-[#0b141a] shadow-[0_30px_80px_rgba(0,0,0,0.35)]">
+3975:       <div className={`${(showChannelsMobile || !selectedChannel) ? 'flex' : 'hidden'} md:flex w-full md:w-[34%] lg:w-[30%] xl:w-[28%] flex-col border-r border-[#26353d] bg-[#111b21] absolute md:static inset-0 z-30`}>
+3976:         <div className="px-5 pt-5 pb-4 border-b border-[#26353d] bg-[#111b21]">
+3977:           <div className="flex items-center justify-between mb-5">
+3978:             <div className="flex items-center gap-3 min-w-0">
+3979:               <img
+3980:                 src={currentUserAvatarUrl || resolveAvatarForName(currentUserProfileName || currentUser)}
+3981:                 alt={currentUserProfileName || currentUser}
+3982:                 className="w-12 h-12 rounded-full object-cover border border-[#314047]"
+3983:               />
+3984:               <div className="min-w-0">
+3985:                 <p className="text-[30px] leading-none font-black tracking-tight text-white truncate">Discussions</p>
+3986:                 <p className="mt-1 text-[11px] text-[#8696a0] truncate">{currentUserProfileName || currentUser}</p>
+3987:               </div>
+3988:             </div>
+3989:             <div className="flex items-center gap-2">
+3990:               <button
+3991:                 onClick={() => setShowChannelsMobile(false)}
+3992:                 className="md:hidden w-10 h-10 rounded-full bg-[#202c33] text-[#d1d7db] flex items-center justify-center"
+3993:                 title="Fermer"
+3994:               >
+3995:                 <X size={16} />
+3996:               </button>
+3997:               <button
+3998:                 onClick={() => cameraInputRef.current?.click()}
+3999:                 className="w-10 h-10 rounded-full bg-[#202c33] text-[#d1d7db] flex items-center justify-center"
+4000:                 title="Envoyer image / Prendre photo"
+4001:               >
+4002:                 <Camera size={18} />
+4003:               </button>
+4004:               <button
+4005:                 onClick={() => {
+4006:                   fetchAllCallHistory();
+4007:                   setShowAllCallsModal(true);
+4008:                 }}
+4009:                 className="w-10 h-10 rounded-full bg-[#202c33] text-[#d1d7db] flex items-center justify-center"
+4010:                 title="Voir tous les appels"
+4011:               >
+4012:                 <Phone size={18} />
+4013:               </button>
+4014:               <input
+4015:                 ref={cameraInputRef}
+4016:                 type="file"
+4017:                 accept="image/*"
+4018:                 capture="environment"
+4019:                 className="hidden"
+4020:                 onChange={(e) => {
+4021:                   const file = e.target.files?.[0] || null;
+4022:                   setAttachedFile(file);
+4023:                   if (file) {
+4024:                     setAttachmentTargetChannel(selectedChannel || conversationItems[0]?.id || '');
+4025:                   }
+4026:                   e.currentTarget.value = '';
+4027:                 }}
+4028:               />
+4029:               <button
+4030:                 onClick={() => setShowChannelsMobile(true)}
+4031:                 className="w-10 h-10 rounded-full bg-[#25d366] text-[#0b141a] flex items-center justify-center md:hidden"
+4032:                 title="Nouvelle discussion"
+4033:               >
+4034:                 <Plus size={18} />
+4035:               </button>
+4036:             </div>
+4037:           </div>
+4038: 
+4039:           <div className="relative mb-4">
+4040:             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#8696a0]" size={16} />
+4041:             <input
+4042:               type="text"
+4043:               value={channelSearch}
+4044:               onChange={(e) => setChannelSearch(e.target.value)}
+4045:               placeholder="Rechercher"
+4046:               className="w-full rounded-2xl bg-[#202c33] py-3 pl-12 pr-4 text-sm text-white placeholder:text-[#8696a0] outline-none"
+4047:             />
+4048:           </div>
+4049: 
+4050:           <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]">
+4051:             {[
+4052:               { id: 'all', label: 'Toutes' },
+4053:               { id: 'unread', label: `Non lues ${Object.values(unreadByChannel).reduce((sum, count) => sum + count, 0)}` },
+4054:               { id: 'favorites', label: 'Favoris' },
+4055:               { id: 'groups', label: 'Groupes' },
+4056:             ].map((filter) => (
+4057:               <button
+4058:                 key={filter.id}
+4059:                 onClick={() => setConversationFilter(filter.id as 'all' | 'unread' | 'favorites' | 'groups')}
+4060:                 className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-bold transition ${conversationFilter === filter.id ? 'bg-[#103529] text-[#d7fdd3]' : 'bg-[#202c33] text-[#d1d7db]'}`}
+4061:               >
+4062:                 {filter.label}
+4063:               </button>
+4064:             ))}
+4065:           </div>
+4066:         </div>
+4067: 
+4068:         {/* === STORIES BAR === */}
+4069:         <div className="border-b border-[#26353d] bg-[#111b21]">
+4070:             <div className="flex items-center gap-3 px-3 py-2 overflow-x-auto [scrollbar-width:none]">
+4071:               {/* My status bubble */}
+4072:               <button
+4073:                 onClick={() => setShowCreateStoryModal(true)}
+4074:                 className="flex flex-col items-center gap-1.5 flex-shrink-0"
+4075:               >
+4076:                 <div className="relative">
+4077:                   <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-5 h-5 rounded-full bg-[#202c33] border border-[#314047] flex items-center justify-center z-10">
+4078:                     <History size={10} className="text-[#53bdeb]" />
+4079:                   </div>
+4080:                   <img
+4081:                     src={currentUserAvatarUrl || resolveAvatarForName(currentUserProfileName || currentUser)}
+4082:                     alt="Mon statut"
+4083:                     className="w-14 h-14 rounded-full object-cover border-2 border-[#314047]"
+4084:                   />
+4085:                   <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-[#25d366] border-2 border-[#111b21] flex items-center justify-center">
+4086:                     <Plus size={10} className="text-[#0b141a]" />
+4087:                   </div>
+4088:                 </div>
+4089:                 <span className="text-[10px] text-[#8696a0] w-14 truncate text-center">Mon statut</span>
+4090:               </button>
+4091: 
+4092:               <input
+4093:                 ref={storyCameraInputRef}
+4094:                 type="file"
+4095:                 accept="image/*"
+4096:                 capture="environment"
+4097:                 className="hidden"
+4098:                 onChange={(e) => {
+4099:                   handleStoryFilePick(e.target.files?.[0] || null);
+4100:                   e.currentTarget.value = '';
+4101:                   setShowCreateStoryModal(true);
+4102:                 }}
+4103:               />
+4104:               <input
+4105:                 ref={storyGalleryInputRef}
+4106:                 type="file"
+4107:                 accept="image/*"
+4108:                 className="hidden"
+4109:                 onChange={(e) => {
+4110:                   handleStoryFilePick(e.target.files?.[0] || null);
+4111:                   e.currentTarget.value = '';
+4112:                   setShowCreateStoryModal(true);
+4113:                 }}
+4114:               />
+4115: 
+4116:               {/* Contact stories */}
+4117:               {contactStories.map((story) => (
+4118:                 <button
+4119:                   key={story.channel_id}
+4120:                   onClick={() => {
+4121:                     setActiveStory(story);
+4122:                     setActiveStoryItemIndex(0);
+4123:                     setStoryProgressKey((k) => k + 1);
+4124:                     setShowStoryViewer(true);
+4125:                   }}
+4126:                   className="flex flex-col items-center gap-1.5 flex-shrink-0"
+4127:                 >
+4128:                   <div className="relative">
+4129:                     <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-5 h-5 rounded-full bg-[#202c33] border border-[#314047] flex items-center justify-center z-10">
+4130:                       <History size={10} className="text-[#53bdeb]" />
+4131:                     </div>
+4132:                     <div className={`rounded-full p-0.5 ${story.has_unviewed ? 'bg-gradient-to-tr from-[#25d366] via-[#53bdeb] to-[#d366c7]' : 'bg-[#4a5568]'}`}>
+4133:                     <img src={story.avatar_url} alt={story.channel_name} className="w-13 h-13 rounded-full object-cover border-2 border-[#111b21] w-[52px] h-[52px]" />
+4134:                     </div>
+4135:                   </div>
+4136:                   <span className="text-[10px] text-[#e9edef] w-14 truncate text-center">{story.channel_name.split(' ')[0]}</span>
+4137:                 </button>
+4138:               ))}
+4139:             </div>
+4140:           </div>
+4141: 
+4142:         <div className="px-3 py-2 border-b border-[#26353d]">
+4143:           <button
+4144:             onClick={() => {
+4145:               setShowArchivedOnly(!showArchivedOnly);
+4146:               if (!showArchivedOnly && selectedChannel && channelArchived[selectedChannel]) {
+4147:                 setSelectedChannel('');
+4148:               }
+4149:             }}
+4150:             disabled={archivedConversationsCount === 0 && !showArchivedOnly}
+4151:             className={`w-full flex items-center justify-between rounded-2xl px-4 py-3 transition ${
+4152:               archivedConversationsCount > 0 || showArchivedOnly
+4153:                 ? `${showArchivedOnly ? 'bg-[#103529] text-[#d7fdd3]' : 'hover:bg-[#202c33] text-[#d1d7db]'}`
+4154:                 : 'opacity-60 cursor-not-allowed text-[#8696a0]'
+4155:             }`}
+4156:             title={archivedConversationsCount > 0 ? `${archivedConversationsCount} conversation(s) archivée(s)` : 'Aucune conversation archivée'}
+4157:           >
+4158:             <div className="flex items-center gap-3">
+4159:               <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+4160:                 showArchivedOnly ? 'bg-[#25d366] text-[#0b141a]' : 'bg-[#202c33] text-[#8696a0]'
+4161:               }`}>
+4162:                 <Archive size={18} />
+4163:               </div>
+4164:               <span className="text-lg font-semibold">Archivées</span>
+4165:             </div>
+4166:             <span className={`text-sm font-bold ${showArchivedOnly ? 'text-[#d7fdd3]' : 'text-[#8696a0]'}`}>
+4167:               {archivedConversationsCount}
+4168:             </span>
+4169:           </button>
+4170:         </div>
+4171: 
+4172:         <div className="flex-1 overflow-y-auto bg-[#111b21]">
+4173:           {conversationItems.map((channel) => {
+4174:             const isSelected = selectedChannel === channel.id;
+4175:             const lastPreview = channel.lastMessage?.message_type === 'audio'
+4176:               ? 'Appel vocal / audio'
+4177:               : channel.lastMessage?.attachment_name
+4178:                 ? `📎 ${channel.lastMessage.attachment_name}`
+4179:                 : channel.lastMessage?.content || channel.description;
+4180: 
+4181:             return (
+4182:               <button
+4183:                 key={channel.id}
+4184:                 onClick={() => {
+4185:                   setSelectedChannel(channel.id);
+4186:                   setShowChannelsMobile(false);
+4187:                 }}
+4188:                 onContextMenu={(e) => {
+4189:                   e.preventDefault();
+4190:                   e.stopPropagation();
+4191:                   // Smart positioning: keep menu inside viewport
+4192:                   const menuW = 220;
+4193:                   const menuH = 360;
+4194:                   const x = e.clientX + menuW > window.innerWidth ? e.clientX - menuW : e.clientX;
+4195:                   const y = e.clientY + menuH > window.innerHeight ? e.clientY - menuH : e.clientY;
+4196:                   setMuteSubmenuOpen(false);
+4197:                   setConversationContextMenu({
+4198:                     open: true,
+4199:                     x,
+4200:                     y,
+4201:                     channel,
+4202:                   });
+4203:                 }}
+4204:                 className={`w-full flex items-center gap-3 px-4 py-3 text-left border-b border-[#1f2c33] transition ${isSelected ? 'bg-[#202c33]' : 'hover:bg-[#182229]'}`}
+4205:               >
+4206:                 {/* Avatar with story ring + online dot */}
+4207:                 {(() => {
+4208:                   const story = contactStories.find((s) => s.channel_id === channel.id);
+4209:                   const presEntry = presenceByUser[channel.avatarLabel];
+4210:                   const isOnline = presEntry?.is_online || false;
+4211:                   const hasStory = !!story;
+4212:                   const hasUnviewed = story?.has_unviewed ?? false;
+4213:                   return (
+4214:                     <div className="relative flex-shrink-0">
+4215:                       <div
+4216:                         role={hasStory ? 'button' : undefined}
+4217:                         tabIndex={hasStory ? 0 : -1}
+4218:                         onClick={(e) => {
+4219:                           if (hasStory) {
+4220:                             e.stopPropagation();
+4221:                             setActiveStory(story!);
+4222:                             setActiveStoryItemIndex(0);
+4223:                             setStoryProgressKey((k) => k + 1);
+4224:                             setShowStoryViewer(true);
+4225:                           }
+4226:                         }}
+4227:                         onKeyDown={(e) => {
+4228:                           if (!hasStory) return;
+4229:                           if (e.key === 'Enter' || e.key === ' ') {
+4230:                             e.preventDefault();
+4231:                             e.stopPropagation();
+4232:                             setActiveStory(story!);
+4233:                             setActiveStoryItemIndex(0);
+4234:                             setStoryProgressKey((k) => k + 1);
+4235:                             setShowStoryViewer(true);
+4236:                           }
+4237:                         }}
+4238:                         className={`block rounded-full p-0.5 ${hasStory ? (hasUnviewed ? 'bg-gradient-to-tr from-[#25d366] via-[#53bdeb] to-[#d366c7]' : 'bg-[#4a5568]') : ''}`}
+4239:                         style={{ pointerEvents: hasStory ? 'auto' : 'none' }}
+4240:                       >
+4241:                         <img src={channel.avatarSrc} alt={channel.name} className="w-[48px] h-[48px] rounded-full object-cover border-2 border-[#111b21]" />
+4242:                       </div>
+4243:                       {isOnline && (
+4244:                         <span className="absolute bottom-0.5 right-0.5 w-3 h-3 rounded-full bg-[#25d366] border-2 border-[#111b21]" />
+4245:                       )}
+4246:                     </div>
+4247:                   );
+4248:                 })()}
+4249:                 <div className="min-w-0 flex-1">
+4250:                   <div className="flex items-center justify-between gap-3 mb-1">
+4251:                     <p className={`truncate text-[17px] font-bold ${isSelected ? 'text-white' : 'text-[#e9edef]'}`}>{channel.name}</p>
+4252:                     <span className={`shrink-0 text-xs ${channel.unread > 0 ? 'text-[#25d366]' : 'text-[#8696a0]'}`}>
+4253:                       {channel.lastMessage ? formatTime(channel.lastMessage.created_at) : ''}
+4254:                     </span>
+4255:                   </div>
+4256:                   <div className="flex items-center justify-between gap-3">
+4257:                     <p className="truncate text-sm text-[#8696a0]">{lastPreview}</p>
+4258:                     {channel.unread > 0 && (
+4259:                       <span className="min-w-6 h-6 px-2 rounded-full bg-[#25d366] text-[#0b141a] text-xs font-black flex items-center justify-center">
+4260:                         {channel.unread > 99 ? '99+' : channel.unread}
+4261:                       </span>
+4262:                     )}
+4263:                   </div>
+4264:                 </div>
+4265:               </button>
+4266:             )
+4267:           })}
+4268:           {conversationItems.length === 0 && showArchivedOnly && (
+4269:             <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+4270:               <div className="w-16 h-16 rounded-full bg-[#202c33] flex items-center justify-center mb-3">
+4271:                 <Archive size={24} className="text-[#8696a0]" />
+4272:               </div>
+4273:               <p className="text-sm font-semibold text-[#e9edef]">Aucune discussion archivée</p>
+4274:               <p className="text-xs text-[#8696a0] mt-1">Les conversations que tu archives apparaîtront ici</p>
+4275:             </div>
+4276:           )}
+4277:           {conversationItems.length === 0 && !showArchivedOnly && channelSearch && (
+4278:             <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+4279:               <p className="text-sm text-[#8696a0]">Aucune discussion trouvée</p>
+4280:             </div>

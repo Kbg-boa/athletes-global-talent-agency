@@ -1,0 +1,138 @@
+1768:         }
+1769:         return next;
+1770:       });
+1771:       resetStoryComposer();
+1772:       setShowCreateStoryModal(false);
+1773:       return;
+1774:     }
+1775: 
+1776:     const { error } = await supabase.from('stories').insert([recordBase]);
+1777:     if (error) {
+1778:       if (isStoriesTableMissingError(error)) {
+1779:         setStoriesBackendAvailable(false);
+1780:         const localRecord: PersistedStoryRecord = {
+1781:           ...recordBase,
+1782:           id: crypto.randomUUID(),
+1783:           views: [],
+1784:         };
+1785:         setStoryRecords((prev) => {
+1786:           const next = [localRecord, ...prev];
+1787:           try {
+1788:             localStorage.setItem(STORY_LS_FALLBACK_KEY, JSON.stringify(next));
+1789:           } catch {
+1790:             // Ignore fallback storage errors.
+1791:           }
+1792:           return next;
+1793:         });
+1794:         resetStoryComposer();
+1795:         setShowCreateStoryModal(false);
+1796:       }
+1797:       return;
+1798:     }
+1799: 
+1800:     void fetchStories();
+1801:     resetStoryComposer();
+1802:     setShowCreateStoryModal(false);
+1803:   }, [storyDraftText, storyDraftImage, currentStoryOwnerKey, currentStoryOwnerName, currentUserAvatarUrl, resolveAvatarForName, currentUser, storyDraftBg, storyPrivacy, storyAudienceKeys, storiesBackendAvailable, supabase, isStoriesTableMissingError, fetchStories, resetStoryComposer]);
+1804: 
+1805:   const activeStoryCurrentItem = useMemo(() => {
+1806:     if (!activeStory) return null;
+1807:     return activeStory.items[activeStoryItemIndex] || null;
+1808:   }, [activeStory, activeStoryItemIndex]);
+1809: 
+1810:   const activeStoryViewers = useMemo(() => {
+1811:     return activeStoryCurrentItem?.views || [];
+1812:   }, [activeStoryCurrentItem]);
+1813: 
+1814:   const selectedConversationMeta = conversationItems.find((channel) => channel.id === selectedChannel);
+1815:   const selectedConversationMessages = useMemo(
+1816:     () => messages.filter((message) => (message.channel || 'Direction Générale') === selectedChannel),
+1817:     [messages, selectedChannel]
+1818:   );
+1819:   const selectedSharedFiles = useMemo(
+1820:     () => selectedConversationMessages.filter((message) => Boolean(message.attachment_name)).slice(-6).reverse(),
+1821:     [selectedConversationMessages]
+1822:   );
+1823:   const selectedImportantCount = useMemo(
+1824:     () => selectedConversationMessages.filter((message) => message.important || message.pinned).length,
+1825:     [selectedConversationMessages]
+1826:   );
+1827:   const selectedConversationName = selectedConversationMeta?.name || selectedChannelMeta?.name || selectedChannel;
+1828:   const selectedConversationDescription = selectedConversationMeta?.description || selectedChannelMeta?.description || 'Discussion AGTA securisee';
+1829:   const selectedAvatarLabel = selectedConversationMeta?.avatarLabel || selectedConversationName;
+1830:   const attachmentTargetOptions = useMemo(
+1831:     () => conversationItems.map((channel) => ({ id: channel.id, name: channel.name })),
+1832:     [conversationItems]
+1833:   );
+1834: 
+1835:   const participantOptions = useMemo(() => {
+1836:     if (isGroupChannelId(selectedChannel)) {
+1837:       const base = GROUP_MEMBERS_BY_CHANNEL[selectedChannel] || ['Direction Générale', 'STAFF SECRETARY'];
+1838:       return base.filter((n) => n !== currentUser);
+1839:     }
+1840:     if (selectedChannel === 'Direction Générale') {
+1841:       return [getPrivatePeerName(selectedChannel)];
+1842:     }
+1843:     return ['Direction Générale', 'STAFF SECRETARY'].filter((n) => n !== currentUser);
+1844:   }, [selectedChannel, currentUser, isGroupChannelId, getPrivatePeerName]);
+1845: 
+1846:   const getAvatarForName = useCallback((name: string) => resolveAvatarForName(name), [resolveAvatarForName]);
+1847:   const selectedAvatarSrc = resolveConversationAvatar(selectedAvatarLabel);
+1848:   const isSelectedChannelGroup = isGroupChannelId(selectedChannel);
+1849:   const selectedGroupMembers = useMemo(() => {
+1850:     if (!isSelectedChannelGroup) return [];
+1851:     const fromMessages = Array.from(
+1852:       new Set(
+1853:         selectedConversationMessages
+1854:           .map((m) => m.sender_name)
+1855:           .filter(Boolean)
+1856:       )
+1857:     );
+1858:     const base = GROUP_MEMBERS_BY_CHANNEL[selectedChannel] || ['Direction Générale', 'STAFF SECRETARY'];
+1859:     const merged = Array.from(new Set([currentUser, ...base, ...fromMessages]));
+1860:     return merged.slice(0, 12);
+1861:   }, [isSelectedChannelGroup, selectedConversationMessages, currentUser, selectedChannel]);
+1862: 
+1863:   const senderOptions = useMemo(() => {
+1864:     const names = new Set<string>();
+1865:     messages.forEach((m) => {
+1866:       if (m.channel === selectedChannel || !m.channel) names.add(m.sender_name);
+1867:     });
+1868:     return ['all', ...Array.from(names)];
+1869:   }, [messages, selectedChannel]);
+1870:   const selectedContext = getSelectedContext();
+1871:   const activeUsers = Object.values(presenceByUser).filter((p) => p.channel === selectedChannel && p.is_online);
+1872:   const peerNameForPresence = useMemo(() => {
+1873:     if (!selectedChannel || isSelectedChannelGroup) return '';
+1874:     if (selectedChannel === 'AGTA BOT') return 'AGTA BOT';
+1875:     return getPrivatePeerName(selectedChannel) || selectedConversationName || selectedChannel;
+1876:   }, [selectedChannel, isSelectedChannelGroup, getPrivatePeerName, selectedConversationName]);
+1877:   const peerPresence = peerNameForPresence ? presenceByUser[peerNameForPresence] : undefined;
+1878:   const conversationPresenceLabel = useMemo(() => {
+1879:     if (selectedChannel === 'AGTA BOT') return 'Assistant actif';
+1880:     if (isSelectedChannelGroup) {
+1881:       return activeUsers.length > 0 ? `${activeUsers.length} en ligne` : 'vu recemment';
+1882:     }
+1883:     if (peerIsTyping) return 'En train d\'écrire…';
+1884:     if (peerIsRecording) return 'En train d\'enregistrer un message vocal…';
+1885:     if (peerPresence?.is_online) return 'en ligne';
+1886:     if (peerPresence?.last_seen) return formatLastSeen(peerPresence.last_seen);
+1887:     return 'vu recemment';
+1888:   }, [selectedChannel, isSelectedChannelGroup, activeUsers.length, peerPresence, peerIsTyping, peerIsRecording]);
+1889:   const currentUserKey = currentUserEmail || currentUser;
+1890:   const callUser = callClientId ? `${currentUser}:${callClientId}` : currentUser;
+1891: 
+1892:   const resolveSignalTarget = (target?: string | null) => {
+1893:     if (!target) return null;
+1894:     return target;
+1895:   };
+1896: 
+1897:   const displayPeerName = (peer?: string) => {
+1898:     if (!peer) return defaultPeer;
+1899:     const base = peer.split(':')[0];
+1900:     return base || peer;
+1901:   };
+1902: 
+1903:   const insertCallSignals = async (rows: Array<Record<string, any>>) => {
+1904:     const { error } = await supabase.from('call_signals').insert(rows);
+1905:     if (error) throw error;
